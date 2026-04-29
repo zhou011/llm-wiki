@@ -1,47 +1,87 @@
 # LLM Wiki
 
-An MVP scaffold for a wiki-first knowledge compiler. The first version focuses on four flows:
+A wiki-first knowledge compiler for small-team and personal research workflows.
 
-1. Accept source documents.
-2. Queue compilation work.
-3. Persist wiki pages and revisions.
-4. Answer questions from compiled wiki pages first.
+LLM Wiki ingests source material, compiles it into durable wiki pages, stores revision history, and answers questions from compiled knowledge before falling back to generic model behavior.
 
-## Architecture
+## What It Does
+
+- Accepts source documents through an API
+- Queues compilation jobs
+- Compiles documents into wiki pages with summaries, source references, and related links
+- Stores page revision history
+- Answers questions from compiled wiki pages
+- Ships with a lightweight browser console at `/`
+
+## Stack
+
+- TypeScript
+- Fastify
+- Zod
+- PostgreSQL or in-memory storage
+- OpenAI-compatible LLM endpoints or a local placeholder mode
+
+## Project Layout
 
 - `src/server.ts`: process entrypoint
 - `src/app.ts`: Fastify app composition
-- `src/routes/*`: HTTP routes
-- `src/domain/*`: core types
-- `src/repositories/*`: storage abstractions and in-memory MVP store
-- `src/services/*`: ingestion, wiki, and ask orchestration
-- `src/worker/*`: background compilation loop
-- `db/sql/*`: target PostgreSQL schema for the production datastore
+- `src/routes/*`: API routes and the console entry route
+- `src/services/*`: ingestion, compilation, wiki, and ask orchestration
+- `src/repositories/*`: in-memory and PostgreSQL persistence layers
+- `src/worker/*`: queued compilation worker
+- `public/*`: browser console UI
+- `db/sql/*`: PostgreSQL schema
+- `docs/architecture.md`: MVP architecture notes
 
-## Run
+## Quick Start
+
+1. Install dependencies:
 
 ```bash
 npm install
+```
+
+2. Copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+3. Start the app:
+
+```bash
 npm run dev
 ```
 
-Use `STORAGE_DRIVER=memory` for the in-memory MVP. Set `STORAGE_DRIVER=postgres` plus `DATABASE_URL` to switch to the PostgreSQL repositories.
-Use `LLM_PROVIDER=placeholder` for offline scaffolding. Set `LLM_PROVIDER=openai-compatible`, `LLM_API_KEY`, `LLM_BASE_URL`, and `LLM_MODEL` to enable live compilation through an OpenAI-compatible chat completions endpoint.
-The same model configuration is reused for wiki-first answer synthesis in `POST /ask`.
-If the live model request fails, the app falls back to the placeholder compiler and placeholder answer synthesizer instead of failing the request.
+4. Open the browser console:
 
-For existing content, you can enqueue a fresh compilation pass with:
-
-```bash
-POST /documents/:id/recompile
-POST /wiki/:slug/recompile
+```text
+http://localhost:3000/
 ```
 
-`POST /ask` returns the synthesized answer plus an explicit `evidence` array with page titles, slugs, and structured source references.
+## Environment
 
-## PostgreSQL
+### Fastest local setup
 
-This repo now includes a plain PostgreSQL migration path:
+Use the default placeholder mode with in-memory storage:
+
+```env
+STORAGE_DRIVER=memory
+LLM_PROVIDER=placeholder
+```
+
+This is the easiest way to try the full document -> compile -> wiki -> ask flow without any external services.
+
+### PostgreSQL mode
+
+To persist documents, jobs, and wiki pages:
+
+```env
+STORAGE_DRIVER=postgres
+DATABASE_URL=postgres://localhost:5432/llm_wiki
+```
+
+Run the migration:
 
 ```bash
 npm run db:migrate
@@ -55,13 +95,108 @@ brew services start postgresql@16
 createdb llm_wiki
 ```
 
-Then set:
+### Live LLM mode
+
+To use an OpenAI-compatible endpoint for compilation and answer synthesis:
 
 ```env
-STORAGE_DRIVER=postgres
-DATABASE_URL=postgres://localhost:5432/llm_wiki
+LLM_PROVIDER=openai-compatible
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_API_KEY=your_api_key
+LLM_MODEL=gpt-4.1-mini
 ```
 
-## Current status
+If the live model call fails, the app falls back to the placeholder compiler and placeholder answer synthesizer.
 
-This scaffold defaults to an in-memory store so the core API shape is usable immediately. The SQL schema in `db/sql/001_init.sql` and the PostgreSQL repositories in `src/repositories/postgres.ts` are the next storage target for a durable deployment.
+## API Flow
+
+### 1. Create a document
+
+```bash
+curl -X POST http://localhost:3000/documents \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sourceType": "text",
+    "title": "Redis Notes",
+    "rawContent": "Redis is an in-memory data store used for caching and queues."
+  }'
+```
+
+### 2. Run compilation
+
+```bash
+curl -X POST http://localhost:3000/jobs/compile
+```
+
+### 3. Browse wiki pages
+
+```bash
+curl http://localhost:3000/wiki
+curl http://localhost:3000/wiki/redis-notes
+```
+
+### 4. Ask a question
+
+```bash
+curl -X POST http://localhost:3000/ask \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What is Redis used for?"
+  }'
+```
+
+## Main Endpoints
+
+- `GET /`: browser console
+- `GET /health`: service and model status
+- `GET /documents`: list ingested documents
+- `POST /documents`: create a document and queue compilation
+- `POST /documents/:id/recompile`: queue recompilation for a document
+- `POST /jobs/compile`: process queued compile jobs once
+- `GET /wiki`: list compiled wiki pages
+- `GET /wiki/:slug`: fetch a wiki page and its revisions
+- `POST /wiki/:slug/recompile`: recompile the source document behind a page
+- `POST /ask`: answer a question from compiled wiki pages
+
+## Browser Console
+
+The built-in console at `/` provides:
+
+- document submission
+- manual compile control
+- wiki page browsing
+- question answering
+- page detail viewing in a right-side drawer
+
+This UI is intentionally lightweight and talks directly to the same backend APIs listed above.
+
+## Current Status
+
+Implemented today:
+
+- in-memory storage
+- PostgreSQL storage
+- queued compile jobs
+- wiki page persistence
+- wiki revision history
+- related page links
+- browser console UI
+- OpenAI-compatible LLM integration
+
+Still intentionally simple:
+
+- question retrieval is page-first keyword scoring, not vector search
+- compilation runs through a manual trigger instead of a persistent background worker
+- `document_chunks` exists in schema planning, but chunking and embeddings are not active yet
+- evidence is grouped by page with nested source references, not claim-level attribution
+
+## Checks
+
+```bash
+npm run check
+npm run build
+```
+
+## Architecture Notes
+
+See [docs/architecture.md](docs/architecture.md) for the MVP architecture and the remaining planned steps.
