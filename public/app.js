@@ -138,7 +138,10 @@ function renderAnswer() {
   const evidenceMarkup = state.answer.evidence.length > 0
     ? state.answer.evidence.map((entry) => `
       <article class="evidence-item">
-        <button class="inline-link" type="button" data-page-slug="${entry.pageSlug}">${escapeHtml(entry.pageTitle)}</button>
+        <div class="evidence-header">
+          <button class="inline-link" type="button" data-page-slug="${entry.pageSlug}">${escapeHtml(entry.pageTitle)}</button>
+          ${typeof entry.score === "number" ? `<span class="score-pill">score ${escapeHtml(String(entry.score))}</span>` : ""}
+        </div>
         <p><strong>${escapeHtml(entry.sourceLabel)}</strong></p>
         <p>${escapeHtml(entry.excerpt) || "No source excerpt returned."}</p>
       </article>

@@ -87,6 +87,43 @@ function scoreExcerpt(tokens: string[], excerpt: string, label: string): number 
   return score;
 }
 
+function countExcerptTokenMatches(tokens: string[], excerpt: string, label: string): number {
+  const normalizedExcerpt = excerpt.toLowerCase();
+  const normalizedLabel = label.toLowerCase();
+
+  return tokens.filter((token) => (
+    normalizedExcerpt.includes(token) || normalizedLabel.includes(token)
+  )).length;
+}
+
+function trimWeakExcerptEvidence<T extends AnswerEvidenceRecord & {
+  score: number;
+  matchedTokenCount: number;
+  excerptScore: number;
+}>(
+  candidates: T[],
+  tokenCount: number
+): T[] {
+  if (candidates.length <= 1) {
+    return candidates;
+  }
+
+  const minimumTokenMatches = tokenCount <= 1 ? 1 : 2;
+  const filtered = candidates.filter((candidate) => candidate.matchedTokenCount >= minimumTokenMatches);
+  if (filtered.length > 0) {
+    return filtered;
+  }
+
+  const bestMatchedTokenCount = Math.max(...candidates.map((candidate) => candidate.matchedTokenCount));
+  const strongestCoverage = candidates.filter((candidate) => candidate.matchedTokenCount === bestMatchedTokenCount);
+  if (strongestCoverage.length > 0) {
+    return strongestCoverage;
+  }
+
+  const bestExcerptScore = Math.max(...candidates.map((candidate) => candidate.excerptScore));
+  return candidates.filter((candidate) => candidate.excerptScore === bestExcerptScore);
+}
+
 function rankEvidencePages(
   pages: Array<{ page: WikiPageRecord; score: number }>
 ): Array<{ page: WikiPageRecord; score: number }> {
@@ -153,38 +190,50 @@ export class AskService {
       };
     }
 
-    const topEvidence = supportingPages
+    const evidenceCandidates = supportingPages
       .flatMap((page) => {
         const match = rankedEvidence.find((candidate) => candidate.page.slug === page.slug);
         const pageScore = match?.score ?? 0;
         const sourceRefs = page.sourceRefs ?? [];
 
         if (sourceRefs.length > 0) {
-          return sourceRefs.map((sourceRef) => ({
-            pageTitle: page.title,
-            pageSlug: page.slug,
-            sourceLabel: sourceRef.label,
-            excerpt: sourceRef.excerpt,
-            score: pageScore + scoreExcerpt(scoringTokens, sourceRef.excerpt, sourceRef.label)
-          }));
+          return sourceRefs.map((sourceRef) => {
+            const excerptScore = scoreExcerpt(scoringTokens, sourceRef.excerpt, sourceRef.label);
+            return {
+              pageTitle: page.title,
+              pageSlug: page.slug,
+              sourceLabel: sourceRef.label,
+              excerpt: sourceRef.excerpt,
+              score: pageScore + excerptScore,
+              excerptScore,
+              matchedTokenCount: countExcerptTokenMatches(scoringTokens, sourceRef.excerpt, sourceRef.label)
+            };
+          });
         }
 
+        const summaryLabel = `${page.title}#summary`;
+        const excerptScore = scoreExcerpt(scoringTokens, page.summary, summaryLabel);
         return [{
           pageTitle: page.title,
           pageSlug: page.slug,
-          sourceLabel: `${page.title}#summary`,
+          sourceLabel: summaryLabel,
           excerpt: page.summary,
-          score: pageScore + scoreExcerpt(scoringTokens, page.summary, `${page.title}#summary`)
+          score: pageScore + excerptScore,
+          excerptScore,
+          matchedTokenCount: countExcerptTokenMatches(scoringTokens, page.summary, summaryLabel)
         }];
       })
-      .sort((left, right) => (right.score ?? 0) - (left.score ?? 0))
+      .sort((left, right) => right.score - left.score);
+
+    const topEvidence = trimWeakExcerptEvidence(evidenceCandidates, scoringTokens.length)
+      .sort((left, right) => right.score - left.score)
       .slice(0, 8);
 
     const synthesized = await this.synthesizer.synthesize(question, supportingPages, topEvidence);
 
     return {
       answer: synthesized.answer,
-      evidence: topEvidence,
+      evidence: topEvidence.map(({ excerptScore, matchedTokenCount, ...evidence }) => evidence),
       supportingPages
     };
   }

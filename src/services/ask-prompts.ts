@@ -1,4 +1,4 @@
-import type { WikiPageRecord } from "../domain/types.js";
+import type { AnswerEvidenceRecord, WikiPageRecord } from "../domain/types.js";
 import type { ModelMessage } from "../llm/types.js";
 
 function formatSourceRefs(page: WikiPageRecord): string {
@@ -12,7 +12,16 @@ function formatSourceRefs(page: WikiPageRecord): string {
     .join(" | ");
 }
 
-export function buildAskPrompt(question: string, pages: WikiPageRecord[]): ModelMessage[] {
+export function buildAskPrompt(
+  question: string,
+  pages: WikiPageRecord[],
+  evidence: AnswerEvidenceRecord[]
+): ModelMessage[] {
+  const evidenceContext = evidence
+    .slice(0, 8)
+    .map((entry) => `- ${entry.pageTitle} (${entry.sourceLabel}): ${entry.excerpt}`)
+    .join("\n");
+
   const context = pages.map((page) => {
     return [
       `Title: ${page.title}`,
@@ -32,6 +41,7 @@ export function buildAskPrompt(question: string, pages: WikiPageRecord[]): Model
         "You answer questions from compiled wiki pages.",
         "Prefer the wiki context over generic world knowledge.",
         "If the pages are insufficient, say what is missing.",
+        "Prefer the most relevant evidence excerpts when they directly answer the question.",
         "When useful, mention which wiki pages support the answer.",
         "Return JSON when possible with the shape {\"answer\": \"...\"}."
       ].join("\n")
@@ -40,6 +50,9 @@ export function buildAskPrompt(question: string, pages: WikiPageRecord[]): Model
       role: "user",
       content: [
         `Question: ${question}`,
+        "",
+        "Top evidence excerpts:",
+        evidenceContext || "None",
         "",
         "Wiki context:",
         context

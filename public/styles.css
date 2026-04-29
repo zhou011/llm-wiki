@@ -372,6 +372,27 @@ textarea:focus {
   border: 1px solid rgba(20, 33, 22, 0.08);
 }
 
+.evidence-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.score-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(23, 59, 47, 0.1);
+  border: 1px solid rgba(23, 59, 47, 0.14);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
 .inline-link {
   border: none;
   padding: 0;
