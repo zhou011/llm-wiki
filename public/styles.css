@@ -322,6 +322,13 @@ textarea:focus {
   font-size: 1rem;
 }
 
+.list-item-inline {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
 .list-item p,
 .drawer-meta,
 .answer-summary p,
@@ -400,6 +407,37 @@ textarea:focus {
   color: var(--accent);
   text-decoration: underline;
   cursor: pointer;
+}
+
+.inline-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.mini-button {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+}
+
+.mini-button:hover {
+  transform: translateY(-1px);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(93, 107, 97, 0.12);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .drawer {

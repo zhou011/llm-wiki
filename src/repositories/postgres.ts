@@ -2,6 +2,12 @@ import type {
   DocumentRecord,
   JobRecord,
   JobStatus,
+  KnowledgeDraft,
+  KnowledgeDraftStatus,
+  LintFinding,
+  LintReport,
+  LintSeverity,
+  QaRecord,
   SourceRefRecord,
   WikiLinkRecord,
   WikiPageRecord,
@@ -10,6 +16,9 @@ import type {
 import type {
   DocumentRepository,
   JobRepository,
+  KnowledgeDraftRepository,
+  LintRepository,
+  QueryRecordRepository,
   RepositoryBundle,
   WikiRepository
 } from "./interfaces.js";
@@ -68,6 +77,55 @@ type WikiLinkRow = {
   source_page_id: string;
   target_page_id: string;
   relationship: string;
+  created_at: Date | string;
+};
+
+type QaRecordRow = {
+  id: string;
+  question: string;
+  normalized_question: string;
+  answer: string;
+  evidence: unknown[] | null;
+  supporting_page_slugs: string[] | null;
+  source_mode: QaRecord["sourceMode"];
+  confidence: number | null;
+  user_feedback: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
+type KnowledgeDraftRow = {
+  id: string;
+  draft_type: KnowledgeDraft["draftType"];
+  status: KnowledgeDraft["status"];
+  source_query_id: string;
+  title: string;
+  target_page_slug: string | null;
+  proposed_body_markdown: string;
+  proposed_summary: string;
+  proposed_source_refs: unknown[] | null;
+  reason: string;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
+type LintReportRow = {
+  id: string;
+  status: LintReport["status"];
+  finding_count: number;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
+type LintFindingRow = {
+  id: string;
+  report_id: string;
+  finding_type: LintFinding["findingType"];
+  severity: LintSeverity;
+  message: string;
+  page_slug: string | null;
+  query_id: string | null;
+  metadata: Record<string, string> | null;
   created_at: Date | string;
 };
 
@@ -160,6 +218,93 @@ function mapWikiLink(row: WikiLinkRow): WikiLinkRecord {
     sourcePageId: row.source_page_id,
     targetPageId: row.target_page_id,
     relationship: row.relationship,
+    createdAt: toIso(row.created_at)
+  };
+}
+
+function normalizeEvidence(evidence: unknown[] | null | undefined): QaRecord["evidence"] {
+  if (!evidence) {
+    return [];
+  }
+
+  return evidence.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return [];
+    }
+
+    const candidate = entry as Record<string, unknown>;
+    if (
+      typeof candidate.pageTitle === "string" &&
+      typeof candidate.pageSlug === "string" &&
+      typeof candidate.sourceLabel === "string" &&
+      typeof candidate.excerpt === "string"
+    ) {
+      return [{
+        pageTitle: candidate.pageTitle,
+        pageSlug: candidate.pageSlug,
+        sourceLabel: candidate.sourceLabel,
+        excerpt: candidate.excerpt,
+        score: typeof candidate.score === "number" ? candidate.score : undefined
+      }];
+    }
+
+    return [];
+  });
+}
+
+function mapQaRecord(row: QaRecordRow): QaRecord {
+  return {
+    id: row.id,
+    question: row.question,
+    normalizedQuestion: row.normalized_question,
+    answer: row.answer,
+    evidence: normalizeEvidence(row.evidence),
+    supportingPageSlugs: row.supporting_page_slugs ?? [],
+    sourceMode: row.source_mode,
+    confidence: row.confidence ?? undefined,
+    userFeedback: row.user_feedback ?? undefined,
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at)
+  };
+}
+
+function mapKnowledgeDraft(row: KnowledgeDraftRow): KnowledgeDraft {
+  return {
+    id: row.id,
+    draftType: row.draft_type,
+    status: row.status,
+    sourceQueryId: row.source_query_id,
+    title: row.title,
+    targetPageSlug: row.target_page_slug ?? undefined,
+    proposedBodyMarkdown: row.proposed_body_markdown,
+    proposedSummary: row.proposed_summary,
+    proposedSourceRefs: normalizeSourceRefs(row.proposed_source_refs),
+    reason: row.reason,
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at)
+  };
+}
+
+function mapLintReport(row: LintReportRow): LintReport {
+  return {
+    id: row.id,
+    status: row.status,
+    findingCount: row.finding_count,
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at)
+  };
+}
+
+function mapLintFinding(row: LintFindingRow): LintFinding {
+  return {
+    id: row.id,
+    reportId: row.report_id,
+    findingType: row.finding_type,
+    severity: row.severity,
+    message: row.message,
+    pageSlug: row.page_slug ?? undefined,
+    queryId: row.query_id ?? undefined,
+    metadata: row.metadata ?? {},
     createdAt: toIso(row.created_at)
   };
 }
@@ -398,6 +543,175 @@ class PostgresWikiRepository implements WikiRepository {
   }
 }
 
+class PostgresQueryRecordRepository implements QueryRecordRepository {
+  constructor(private readonly db: Queryable) {}
+
+  async list(limit?: number): Promise<QaRecord[]> {
+    const values = typeof limit === "number" ? [limit] : [];
+    const sql = typeof limit === "number"
+      ? "select * from qa_records order by created_at desc limit $1"
+      : "select * from qa_records order by created_at desc";
+    const result = await this.db.query<QaRecordRow>(sql, values);
+    return result.rows.map(mapQaRecord);
+  }
+
+  async getById(id: string): Promise<QaRecord | undefined> {
+    const result = await this.db.query<QaRecordRow>(
+      "select * from qa_records where id = $1 limit 1",
+      [id]
+    );
+    return result.rows[0] ? mapQaRecord(result.rows[0]) : undefined;
+  }
+
+  async create(record: QaRecord): Promise<QaRecord> {
+    const result = await this.db.query<QaRecordRow>(
+      `insert into qa_records
+       (id, question, normalized_question, answer, evidence, supporting_page_slugs, source_mode, confidence, user_feedback, created_at, updated_at)
+       values ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11)
+       returning *`,
+      [
+        record.id,
+        record.question,
+        record.normalizedQuestion,
+        record.answer,
+        JSON.stringify(record.evidence),
+        JSON.stringify(record.supportingPageSlugs),
+        record.sourceMode,
+        record.confidence ?? null,
+        record.userFeedback ?? null,
+        record.createdAt,
+        record.updatedAt
+      ]
+    );
+    return mapQaRecord(result.rows[0]);
+  }
+
+  async countByNormalizedQuestion(normalizedQuestion: string): Promise<number> {
+    const result = await this.db.query<{ count: string }>(
+      "select count(*)::text as count from qa_records where normalized_question = $1",
+      [normalizedQuestion]
+    );
+    return Number(result.rows[0]?.count ?? "0");
+  }
+}
+
+class PostgresKnowledgeDraftRepository implements KnowledgeDraftRepository {
+  constructor(private readonly db: Queryable) {}
+
+  async list(limit?: number): Promise<KnowledgeDraft[]> {
+    const values = typeof limit === "number" ? [limit] : [];
+    const sql = typeof limit === "number"
+      ? "select * from knowledge_drafts order by created_at desc limit $1"
+      : "select * from knowledge_drafts order by created_at desc";
+    const result = await this.db.query<KnowledgeDraftRow>(sql, values);
+    return result.rows.map(mapKnowledgeDraft);
+  }
+
+  async getById(id: string): Promise<KnowledgeDraft | undefined> {
+    const result = await this.db.query<KnowledgeDraftRow>(
+      "select * from knowledge_drafts where id = $1 limit 1",
+      [id]
+    );
+    return result.rows[0] ? mapKnowledgeDraft(result.rows[0]) : undefined;
+  }
+
+  async create(draft: KnowledgeDraft): Promise<KnowledgeDraft> {
+    const result = await this.db.query<KnowledgeDraftRow>(
+      `insert into knowledge_drafts
+       (id, draft_type, status, source_query_id, title, target_page_slug, proposed_body_markdown, proposed_summary, proposed_source_refs, reason, created_at, updated_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12)
+       returning *`,
+      [
+        draft.id,
+        draft.draftType,
+        draft.status,
+        draft.sourceQueryId,
+        draft.title,
+        draft.targetPageSlug ?? null,
+        draft.proposedBodyMarkdown,
+        draft.proposedSummary,
+        JSON.stringify(draft.proposedSourceRefs),
+        draft.reason,
+        draft.createdAt,
+        draft.updatedAt
+      ]
+    );
+    return mapKnowledgeDraft(result.rows[0]);
+  }
+
+  async updateStatus(id: string, status: KnowledgeDraftStatus): Promise<void> {
+    await this.db.query(
+      "update knowledge_drafts set status = $2, updated_at = now() where id = $1",
+      [id, status]
+    );
+  }
+}
+
+class PostgresLintRepository implements LintRepository {
+  constructor(private readonly db: Queryable) {}
+
+  async listReports(limit?: number): Promise<LintReport[]> {
+    const values = typeof limit === "number" ? [limit] : [];
+    const sql = typeof limit === "number"
+      ? "select * from lint_reports order by created_at desc limit $1"
+      : "select * from lint_reports order by created_at desc";
+    const result = await this.db.query<LintReportRow>(sql, values);
+    return result.rows.map(mapLintReport);
+  }
+
+  async getReportById(id: string): Promise<LintReport | undefined> {
+    const result = await this.db.query<LintReportRow>(
+      "select * from lint_reports where id = $1 limit 1",
+      [id]
+    );
+    return result.rows[0] ? mapLintReport(result.rows[0]) : undefined;
+  }
+
+  async createReport(report: LintReport): Promise<LintReport> {
+    const result = await this.db.query<LintReportRow>(
+      `insert into lint_reports
+       (id, status, finding_count, created_at, updated_at)
+       values ($1, $2, $3, $4, $5)
+       returning *`,
+      [report.id, report.status, report.findingCount, report.createdAt, report.updatedAt]
+    );
+    return mapLintReport(result.rows[0]);
+  }
+
+  async addFinding(finding: LintFinding): Promise<LintFinding> {
+    const result = await this.db.query<LintFindingRow>(
+      `insert into lint_findings
+       (id, report_id, finding_type, severity, message, page_slug, query_id, metadata, created_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
+       returning *`,
+      [
+        finding.id,
+        finding.reportId,
+        finding.findingType,
+        finding.severity,
+        finding.message,
+        finding.pageSlug ?? null,
+        finding.queryId ?? null,
+        JSON.stringify(finding.metadata),
+        finding.createdAt
+      ]
+    );
+    await this.db.query(
+      "update lint_reports set finding_count = finding_count + 1, updated_at = now() where id = $1",
+      [finding.reportId]
+    );
+    return mapLintFinding(result.rows[0]);
+  }
+
+  async listFindingsByReportId(reportId: string): Promise<LintFinding[]> {
+    const result = await this.db.query<LintFindingRow>(
+      "select * from lint_findings where report_id = $1 order by created_at asc",
+      [reportId]
+    );
+    return result.rows.map(mapLintFinding);
+  }
+}
+
 export async function createPostgresRepositories(databaseUrl: string): Promise<RepositoryBundle> {
   const pgModule = await import("pg");
   const pool = new pgModule.Pool({
@@ -408,6 +722,9 @@ export async function createPostgresRepositories(databaseUrl: string): Promise<R
     documents: new PostgresDocumentRepository(pool),
     jobs: new PostgresJobRepository(pool),
     wiki: new PostgresWikiRepository(pool),
+    queries: new PostgresQueryRecordRepository(pool),
+    drafts: new PostgresKnowledgeDraftRepository(pool),
+    lint: new PostgresLintRepository(pool),
     async close(): Promise<void> {
       await pool.end();
     }

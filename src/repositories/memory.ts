@@ -2,6 +2,11 @@ import type {
   DocumentRecord,
   JobRecord,
   JobStatus,
+  KnowledgeDraft,
+  KnowledgeDraftStatus,
+  LintFinding,
+  LintReport,
+  QaRecord,
   WikiLinkRecord,
   WikiPageRecord,
   WikiPageRevisionRecord
@@ -9,6 +14,9 @@ import type {
 import type {
   DocumentRepository,
   JobRepository,
+  KnowledgeDraftRepository,
+  LintRepository,
+  QueryRecordRepository,
   RepositoryBundle,
   WikiRepository
 } from "./interfaces.js";
@@ -143,11 +151,110 @@ class MemoryWikiRepository implements WikiRepository {
   }
 }
 
+class MemoryQueryRecordRepository implements QueryRecordRepository {
+  private readonly records = new Map<string, QaRecord>();
+
+  async list(limit?: number): Promise<QaRecord[]> {
+    const records = Array.from(this.records.values())
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    return typeof limit === "number" ? records.slice(0, limit) : records;
+  }
+
+  async getById(id: string): Promise<QaRecord | undefined> {
+    return this.records.get(id);
+  }
+
+  async create(record: QaRecord): Promise<QaRecord> {
+    this.records.set(record.id, record);
+    return record;
+  }
+
+  async countByNormalizedQuestion(normalizedQuestion: string): Promise<number> {
+    return Array.from(this.records.values()).filter((record) => record.normalizedQuestion === normalizedQuestion).length;
+  }
+}
+
+class MemoryKnowledgeDraftRepository implements KnowledgeDraftRepository {
+  private readonly drafts = new Map<string, KnowledgeDraft>();
+
+  async list(limit?: number): Promise<KnowledgeDraft[]> {
+    const drafts = Array.from(this.drafts.values())
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    return typeof limit === "number" ? drafts.slice(0, limit) : drafts;
+  }
+
+  async getById(id: string): Promise<KnowledgeDraft | undefined> {
+    return this.drafts.get(id);
+  }
+
+  async create(draft: KnowledgeDraft): Promise<KnowledgeDraft> {
+    this.drafts.set(draft.id, draft);
+    return draft;
+  }
+
+  async updateStatus(id: string, status: KnowledgeDraftStatus): Promise<void> {
+    const existing = this.drafts.get(id);
+    if (!existing) {
+      return;
+    }
+
+    this.drafts.set(id, {
+      ...existing,
+      status,
+      updatedAt: new Date().toISOString()
+    });
+  }
+}
+
+class MemoryLintRepository implements LintRepository {
+  private readonly reports = new Map<string, LintReport>();
+  private readonly findings = new Map<string, LintFinding[]>();
+
+  async listReports(limit?: number): Promise<LintReport[]> {
+    const reports = Array.from(this.reports.values())
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    return typeof limit === "number" ? reports.slice(0, limit) : reports;
+  }
+
+  async getReportById(id: string): Promise<LintReport | undefined> {
+    return this.reports.get(id);
+  }
+
+  async createReport(report: LintReport): Promise<LintReport> {
+    this.reports.set(report.id, report);
+    return report;
+  }
+
+  async addFinding(finding: LintFinding): Promise<LintFinding> {
+    const existing = this.findings.get(finding.reportId) ?? [];
+    existing.push(finding);
+    this.findings.set(finding.reportId, existing);
+
+    const report = this.reports.get(finding.reportId);
+    if (report) {
+      this.reports.set(finding.reportId, {
+        ...report,
+        findingCount: existing.length,
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    return finding;
+  }
+
+  async listFindingsByReportId(reportId: string): Promise<LintFinding[]> {
+    return this.findings.get(reportId) ?? [];
+  }
+}
+
 export function createMemoryRepositories(): RepositoryBundle {
   return {
     documents: new MemoryDocumentRepository(),
     jobs: new MemoryJobRepository(),
     wiki: new MemoryWikiRepository(),
+    queries: new MemoryQueryRecordRepository(),
+    drafts: new MemoryKnowledgeDraftRepository(),
+    lint: new MemoryLintRepository(),
     async close(): Promise<void> {}
   };
 }

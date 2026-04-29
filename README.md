@@ -11,6 +11,9 @@ LLM Wiki ingests source material, compiles it into durable wiki pages, stores re
 - Compiles documents into wiki pages with summaries, source references, and related links
 - Stores page revision history
 - Answers questions from compiled wiki pages
+- Persists query history
+- Proposes knowledge drafts from repeated questions
+- Runs lint reports over wiki coverage and sourcing
 - Ships with a lightweight browser console at `/`
 
 ## Stack
@@ -152,11 +155,21 @@ curl -X POST http://localhost:3000/ask \
 - `GET /documents`: list ingested documents
 - `POST /documents`: create a document and queue compilation
 - `POST /documents/:id/recompile`: queue recompilation for a document
+- `GET /schema/wiki`: inspect the current wiki maintenance schema
 - `POST /jobs/compile`: process queued compile jobs once
+- `POST /jobs/lint`: generate a lint report
 - `GET /wiki`: list compiled wiki pages
 - `GET /wiki/:slug`: fetch a wiki page and its revisions
 - `POST /wiki/:slug/recompile`: recompile the source document behind a page
 - `POST /ask`: answer a question from compiled wiki pages
+- `GET /queries`: list recent ask history
+- `GET /queries/:id`: fetch a single query record
+- `GET /drafts`: list proposed knowledge drafts
+- `GET /drafts/:id`: fetch a single draft
+- `POST /drafts/:id/apply`: apply a draft into the wiki
+- `POST /drafts/:id/reject`: reject a draft
+- `GET /lint/reports`: list lint reports
+- `GET /lint/reports/:id`: fetch a report and its findings
 
 ## Browser Console
 
@@ -166,6 +179,9 @@ The built-in console at `/` provides:
 - manual compile control
 - wiki page browsing
 - question answering
+- recent query history
+- knowledge draft review
+- lint report visibility
 - page detail viewing in a right-side drawer
 
 This UI is intentionally lightweight and talks directly to the same backend APIs listed above.
@@ -182,6 +198,10 @@ Implemented today:
 - related page links
 - browser console UI
 - OpenAI-compatible LLM integration
+- file-backed wiki schema at `/schema/wiki`
+- persisted `qa_records`
+- proposed `knowledge_drafts`
+- persisted lint reports and findings
 
 Still intentionally simple:
 
@@ -189,6 +209,8 @@ Still intentionally simple:
 - compilation runs through a manual trigger instead of a persistent background worker
 - `document_chunks` exists in schema planning, but chunking and embeddings are not active yet
 - evidence is returned at the excerpt or source-reference level, not full claim-level attribution
+- draft generation is heuristic and conservative
+- lint is rule-based and explainable, not semantic
 
 ## Checks
 

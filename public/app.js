@@ -2,6 +2,9 @@ const state = {
   health: null,
   documents: [],
   pages: [],
+  queries: [],
+  drafts: [],
+  lintReports: [],
   answer: null,
   selectedPage: null,
   selectedPageSlug: null,
@@ -15,6 +18,8 @@ const elements = {
   lastUpdated: document.querySelector("#last-updated"),
   documentCount: document.querySelector("#document-count"),
   pageCount: document.querySelector("#page-count"),
+  queryCount: document.querySelector("#query-count"),
+  draftCount: document.querySelector("#draft-count"),
   queuedCount: document.querySelector("#queued-count"),
   processingCount: document.querySelector("#processing-count"),
   compiledCount: document.querySelector("#compiled-count"),
@@ -22,6 +27,9 @@ const elements = {
   compileFeedback: document.querySelector("#compile-feedback"),
   documentStatusCopy: document.querySelector("#document-status-copy"),
   wikiList: document.querySelector("#wiki-list"),
+  queryList: document.querySelector("#query-list"),
+  draftList: document.querySelector("#draft-list"),
+  lintList: document.querySelector("#lint-list"),
   answerPanel: document.querySelector("#answer-panel"),
   documentForm: document.querySelector("#document-form"),
   submitDocumentButton: document.querySelector("#submit-document-button"),
@@ -30,6 +38,8 @@ const elements = {
   askButton: document.querySelector("#ask-button"),
   askFeedback: document.querySelector("#ask-feedback"),
   runCompileButton: document.querySelector("#run-compile-button"),
+  runLintButton: document.querySelector("#run-lint-button"),
+  lintFeedback: document.querySelector("#lint-feedback"),
   refreshAllButton: document.querySelector("#refresh-all-button"),
   drawer: document.querySelector("#drawer"),
   drawerBackdrop: document.querySelector("#drawer-backdrop"),
@@ -94,6 +104,8 @@ function renderHealth() {
 function renderCounts() {
   elements.documentCount.textContent = `${state.documents.length} docs`;
   elements.pageCount.textContent = `${state.pages.length} pages`;
+  elements.queryCount.textContent = `${state.queries.length} queries`;
+  elements.draftCount.textContent = `${state.drafts.length} drafts`;
 
   const counts = state.documents.reduce((accumulator, document) => {
     accumulator[document.status] = (accumulator[document.status] ?? 0) + 1;
@@ -103,6 +115,78 @@ function renderCounts() {
   elements.queuedCount.textContent = String(counts.queued ?? 0);
   elements.processingCount.textContent = String(counts.processing ?? 0);
   elements.compiledCount.textContent = String(counts.compiled ?? 0);
+}
+
+function renderQueries() {
+  if (state.queries.length === 0) {
+    elements.queryList.innerHTML = '<div class="empty-state">Questions you ask through the console will appear here.</div>';
+    return;
+  }
+
+  elements.queryList.innerHTML = state.queries.map((query) => `
+    <article class="list-item">
+      <div class="list-item-inline">
+        <div class="list-item-meta">${formatTime(query.createdAt)}</div>
+        <span class="status-badge">${escapeHtml(query.sourceMode)}</span>
+      </div>
+      <h3>${escapeHtml(query.question)}</h3>
+      <p>${escapeHtml(query.answer)}</p>
+    </article>
+  `).join("");
+}
+
+function renderDrafts() {
+  if (state.drafts.length === 0) {
+    elements.draftList.innerHTML = '<div class="empty-state">High-value repeated questions will propose draft wiki content here.</div>';
+    return;
+  }
+
+  elements.draftList.innerHTML = state.drafts.map((draft) => `
+    <article class="list-item">
+      <div class="list-item-inline">
+        <div class="list-item-meta">${escapeHtml(draft.draftType)} • ${formatTime(draft.createdAt)}</div>
+        <span class="status-badge">${escapeHtml(draft.status)}</span>
+      </div>
+      <h3>${escapeHtml(draft.title)}</h3>
+      <p>${escapeHtml(draft.reason)}</p>
+      ${draft.status === "proposed" ? `
+        <div class="inline-actions">
+          <button class="mini-button" type="button" data-apply-draft="${draft.id}">Apply</button>
+          <button class="mini-button" type="button" data-reject-draft="${draft.id}">Reject</button>
+        </div>
+      ` : ""}
+    </article>
+  `).join("");
+
+  elements.draftList.querySelectorAll("[data-apply-draft]").forEach((node) => {
+    node.addEventListener("click", () => {
+      void handleDraftApply(node.getAttribute("data-apply-draft"));
+    });
+  });
+
+  elements.draftList.querySelectorAll("[data-reject-draft]").forEach((node) => {
+    node.addEventListener("click", () => {
+      void handleDraftReject(node.getAttribute("data-reject-draft"));
+    });
+  });
+}
+
+function renderLintReports() {
+  if (state.lintReports.length === 0) {
+    elements.lintList.innerHTML = '<div class="empty-state">Run lint to surface gaps in sourcing, coverage, and page linkage.</div>';
+    return;
+  }
+
+  elements.lintList.innerHTML = state.lintReports.map((report) => `
+    <article class="list-item">
+      <div class="list-item-inline">
+        <div class="list-item-meta">${formatTime(report.createdAt)}</div>
+        <span class="status-badge">${report.findingCount} findings</span>
+      </div>
+      <h3>Lint report ${escapeHtml(report.id)}</h3>
+      <p>Status: ${escapeHtml(report.status)}</p>
+    </article>
+  `).join("");
 }
 
 function renderWikiList() {
@@ -219,19 +303,28 @@ function escapeHtml(value) {
 }
 
 async function refreshWorkspace() {
-  const [health, documents, wiki] = await Promise.all([
+  const [health, documents, wiki, queries, drafts, lintReports] = await Promise.all([
     requestJson("/health"),
     requestJson("/documents"),
-    requestJson("/wiki")
+    requestJson("/wiki"),
+    requestJson("/queries"),
+    requestJson("/drafts"),
+    requestJson("/lint/reports")
   ]);
 
   state.health = health;
   state.documents = documents.documents ?? [];
   state.pages = wiki.pages ?? [];
+  state.queries = queries.queries ?? [];
+  state.drafts = drafts.drafts ?? [];
+  state.lintReports = lintReports.reports ?? [];
 
   renderHealth();
   renderCounts();
   renderWikiList();
+  renderQueries();
+  renderDrafts();
+  renderLintReports();
   renderCompileActivity();
 }
 
@@ -371,6 +464,48 @@ async function handlePageRecompile() {
   }
 }
 
+async function handleDraftApply(id) {
+  if (!id) {
+    return;
+  }
+
+  await requestJson(`/drafts/${encodeURIComponent(id)}/apply`, {
+    method: "POST",
+    body: JSON.stringify({})
+  });
+  await refreshWorkspace();
+}
+
+async function handleDraftReject(id) {
+  if (!id) {
+    return;
+  }
+
+  await requestJson(`/drafts/${encodeURIComponent(id)}/reject`, {
+    method: "POST",
+    body: JSON.stringify({})
+  });
+  await refreshWorkspace();
+}
+
+async function handleLintRun() {
+  elements.runLintButton.disabled = true;
+  setFeedback(elements.lintFeedback, "Running lint analysis...");
+
+  try {
+    const result = await requestJson("/jobs/lint", {
+      method: "POST",
+      body: JSON.stringify({})
+    });
+    setFeedback(elements.lintFeedback, `Lint completed with ${result.findingCount} finding(s).`);
+    await refreshWorkspace();
+  } catch (error) {
+    setFeedback(elements.lintFeedback, error.message, "danger");
+  } finally {
+    elements.runLintButton.disabled = false;
+  }
+}
+
 elements.documentForm.addEventListener("submit", (event) => {
   void handleDocumentSubmit(event);
 });
@@ -381,6 +516,10 @@ elements.askForm.addEventListener("submit", (event) => {
 
 elements.runCompileButton.addEventListener("click", () => {
   void handleCompileRun();
+});
+
+elements.runLintButton.addEventListener("click", () => {
+  void handleLintRun();
 });
 
 elements.refreshAllButton.addEventListener("click", () => {

@@ -166,6 +166,43 @@
             <p class="empty-copy">Answers and source evidence will appear here.</p>
           </div>
         </section>
+
+        <section class="panel panel-scroll">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Observe</p>
+              <h2>Recent Queries</h2>
+            </div>
+            <span class="pill" id="query-count">0 queries</span>
+          </div>
+
+          <div id="query-list" class="list"></div>
+        </section>
+
+        <section class="panel panel-scroll">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Accumulate</p>
+              <h2>Knowledge Drafts</h2>
+            </div>
+            <span class="pill" id="draft-count">0 drafts</span>
+          </div>
+
+          <div id="draft-list" class="list"></div>
+        </section>
+
+        <section class="panel panel-scroll">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Inspect</p>
+              <h2>Lint Reports</h2>
+            </div>
+            <button id="run-lint-button" type="button" class="secondary-button">Run Lint</button>
+          </div>
+
+          <p id="lint-feedback" class="feedback compile-feedback" aria-live="polite"></p>
+          <div id="lint-list" class="list"></div>
+        </section>
       </main>
     </div>
 

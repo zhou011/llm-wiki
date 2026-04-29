@@ -1,6 +1,8 @@
 import type { AnswerEvidenceRecord, WikiPageRecord } from "../domain/types.js";
 import type { RepositoryBundle } from "../repositories/interfaces.js";
 import type { AnswerSynthesizer } from "./answer-synthesizer.js";
+import { DraftService } from "./draft-service.js";
+import { QueryService } from "./query-service.js";
 
 const stopWords = new Set([
   "a",
@@ -154,10 +156,16 @@ function trimWeakEvidence(
 }
 
 export class AskService {
+  private readonly queryService: QueryService;
+  private readonly draftService: DraftService;
+
   constructor(
     private readonly repositories: RepositoryBundle,
     private readonly synthesizer: AnswerSynthesizer
-  ) {}
+  ) {
+    this.queryService = new QueryService(repositories);
+    this.draftService = new DraftService(repositories);
+  }
 
   async answer(question: string): Promise<{
     answer: string;
@@ -231,10 +239,20 @@ export class AskService {
 
     const synthesized = await this.synthesizer.synthesize(question, supportingPages, topEvidence);
 
-    return {
+    const response = {
       answer: synthesized.answer,
       evidence: topEvidence.map(({ excerptScore, matchedTokenCount, ...evidence }) => evidence),
       supportingPages
     };
+
+    const queryRecord = await this.queryService.createRecord({
+      question,
+      answer: response.answer,
+      evidence: response.evidence,
+      supportingPages: response.supportingPages
+    });
+    await this.draftService.maybeCreateDraftsFromQuery(queryRecord, response.supportingPages);
+
+    return response;
   }
 }

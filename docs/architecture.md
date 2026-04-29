@@ -16,6 +16,10 @@ Implemented today:
 - persist wiki pages and revision history
 - expose wiki pages for browsing
 - answer questions from compiled wiki pages
+- persist query history
+- propose draft knowledge from repeated questions
+- generate lint reports and findings
+- expose a file-backed wiki schema
 - provide a lightweight browser console at `/`
 
 Still intentionally simple:
@@ -23,11 +27,14 @@ Still intentionally simple:
 - compile execution is manually triggered
 - retrieval is page-first keyword scoring
 - evidence is excerpt-level, not claim-level
+- query write-back is proposal-based, not automatic page mutation
+- lint is heuristic, not semantic
 - chunking and embeddings are not active yet
 
 ## Runtime Shape
 
 - API: Fastify service exposing health, document, wiki, ask, compile, and UI routes
+- Additional v1.1 routes: schema, queries, drafts, lint
 - UI: static browser console served directly by the app from `public/`
 - Storage: switchable repository layer using `STORAGE_DRIVER=memory|postgres`
 - PostgreSQL: fully implemented for durable storage behind `DATABASE_URL`
@@ -62,6 +69,10 @@ Used for persistence.
 - `wiki_page_revisions`: immutable page history
 - `wiki_links`: relationships between pages
 - `jobs`: async pipeline tracking
+- `qa_records`: persisted ask history
+- `knowledge_drafts`: proposed wiki write-back candidates
+- `lint_reports`: lint job runs
+- `lint_findings`: persisted lint output
 
 ### Planned but not active yet
 
@@ -109,10 +120,13 @@ Used for persistence.
 1. `POST /ask` validates the incoming question.
 2. `AskService` loads compiled wiki pages and scores them with a lightweight token-based matcher.
 3. The top matching pages become `supportingPages`.
-4. `AnswerSynthesizer` produces the answer:
+4. The service builds excerpt-level evidence and filters weak excerpts.
+5. `AnswerSynthesizer` produces the answer:
    - placeholder mode returns a simple scaffolded response
    - live mode sends the selected wiki pages to the configured LLM
-5. The response includes:
+6. The system stores a `qa_record`.
+7. Repeated or high-value questions may generate a proposed `knowledge_draft`.
+8. The response includes:
    - `answer`
    - `evidence`
    - `supportingPages`
@@ -133,6 +147,9 @@ It currently provides:
 - compile triggering
 - wiki page browsing
 - question asking
+- recent queries
+- draft review actions
+- lint report visibility
 - page detail viewing in a right-side drawer
 
 This UI does not add separate backend state or orchestration. It only calls the existing API routes.
@@ -159,6 +176,7 @@ This UI does not add separate backend state or orchestration. It only calls the 
 - `pgvector` storage
 - persistent background workers
 - claim-level evidence attribution
+- semantic linting or contradiction analysis
 - raw-source fallback answering when no compiled pages match
 
 ## Next Implementation Steps

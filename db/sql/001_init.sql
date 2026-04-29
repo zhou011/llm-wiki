@@ -63,9 +63,61 @@ create table if not exists jobs (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists qa_records (
+  id text primary key,
+  question text not null,
+  normalized_question text not null,
+  answer text not null,
+  evidence jsonb not null default '[]'::jsonb,
+  supporting_page_slugs jsonb not null default '[]'::jsonb,
+  source_mode text not null,
+  confidence double precision,
+  user_feedback text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists knowledge_drafts (
+  id text primary key,
+  draft_type text not null,
+  status text not null,
+  source_query_id text not null references qa_records(id) on delete cascade,
+  title text not null,
+  target_page_slug text,
+  proposed_body_markdown text not null,
+  proposed_summary text not null,
+  proposed_source_refs jsonb not null default '[]'::jsonb,
+  reason text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists lint_reports (
+  id text primary key,
+  status text not null,
+  finding_count integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists lint_findings (
+  id text primary key,
+  report_id text not null references lint_reports(id) on delete cascade,
+  finding_type text not null,
+  severity text not null,
+  message text not null,
+  page_slug text,
+  query_id text references qa_records(id) on delete set null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists document_chunks_document_id_idx on document_chunks(document_id);
 create index if not exists wiki_pages_slug_idx on wiki_pages(slug);
 create index if not exists jobs_status_idx on jobs(status);
+create index if not exists qa_records_normalized_question_idx on qa_records(normalized_question);
+create index if not exists knowledge_drafts_status_idx on knowledge_drafts(status);
+create index if not exists lint_findings_report_id_idx on lint_findings(report_id);
 
 alter table wiki_pages
   add column if not exists source_refs jsonb not null default '[]'::jsonb;

@@ -1,0 +1,44 @@
+{
+  "pageTypes": {
+    "entity": {
+      "requiredSections": ["Overview", "Key Points", "Related Pages", "Source Notes"],
+      "createWhen": "A source primarily describes a single named thing."
+    },
+    "topic": {
+      "requiredSections": ["Overview", "Key Points", "Related Pages", "Source Notes"],
+      "createWhen": "A source explains a theme, capability, or subject area."
+    },
+    "timeline": {
+      "requiredSections": ["Overview", "Timeline", "Related Pages", "Source Notes"],
+      "createWhen": "A source is organized around events or chronology."
+    },
+    "faq": {
+      "requiredSections": ["Question", "Short Answer", "Evidence", "Related Pages"],
+      "createWhen": "The same normalized question appears repeatedly with a stable answer."
+    },
+    "comparison": {
+      "requiredSections": ["Overview", "Comparison", "Tradeoffs", "Evidence"],
+      "createWhen": "A question or source requires comparing two or more topics or entities."
+    },
+    "concept": {
+      "requiredSections": ["Definition", "Why It Matters", "Evidence", "Related Pages"],
+      "createWhen": "A cross-cutting idea needs its own page outside any single entity."
+    },
+    "index": {
+      "requiredSections": ["Overview", "Page Map", "Related Pages"],
+      "createWhen": "A theme has enough connected pages that navigation is useful."
+    }
+  },
+  "writeBackRules": {
+    "faqQuestionRepeatThreshold": 3,
+    "comparisonSupportingPageThreshold": 2,
+    "minimumEvidenceCount": 2
+  },
+  "lintRules": {
+    "minimumSourceRefsPerPage": 1,
+    "highQueryLowCoverageThreshold": 3,
+    "flagOrphanPages": true,
+    "flagWeakSourcing": true,
+    "flagDuplicateTitles": true
+  }
+}
