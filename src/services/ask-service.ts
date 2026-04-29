@@ -153,18 +153,38 @@ export class AskService {
       };
     }
 
-    const synthesized = await this.synthesizer.synthesize(question, supportingPages);
+    const topEvidence = supportingPages
+      .flatMap((page) => {
+        const match = rankedEvidence.find((candidate) => candidate.page.slug === page.slug);
+        const pageScore = match?.score ?? 0;
+        const sourceRefs = page.sourceRefs ?? [];
+
+        if (sourceRefs.length > 0) {
+          return sourceRefs.map((sourceRef) => ({
+            pageTitle: page.title,
+            pageSlug: page.slug,
+            sourceLabel: sourceRef.label,
+            excerpt: sourceRef.excerpt,
+            score: pageScore + scoreExcerpt(scoringTokens, sourceRef.excerpt, sourceRef.label)
+          }));
+        }
+
+        return [{
+          pageTitle: page.title,
+          pageSlug: page.slug,
+          sourceLabel: `${page.title}#summary`,
+          excerpt: page.summary,
+          score: pageScore + scoreExcerpt(scoringTokens, page.summary, `${page.title}#summary`)
+        }];
+      })
+      .sort((left, right) => (right.score ?? 0) - (left.score ?? 0))
+      .slice(0, 8);
+
+    const synthesized = await this.synthesizer.synthesize(question, supportingPages, topEvidence);
 
     return {
       answer: synthesized.answer,
-      evidence: synthesized.evidence.map((entry) => {
-        const match = rankedEvidence.find((candidate) => candidate.page.slug === entry.pageSlug);
-        const excerptScore = scoreExcerpt(scoringTokens, entry.excerpt, entry.sourceLabel);
-        return {
-          ...entry,
-          score: (match?.score ?? 0) + excerptScore
-        };
-      }).sort((left, right) => (right.score ?? 0) - (left.score ?? 0)),
+      evidence: topEvidence,
       supportingPages
     };
   }

@@ -28,20 +28,20 @@ function buildEvidenceFromPages(pages: WikiPageRecord[]): AnswerEvidenceRecord[]
 }
 
 export interface AnswerSynthesizer {
-  synthesize(question: string, pages: WikiPageRecord[]): Promise<{
+  synthesize(question: string, pages: WikiPageRecord[], evidence?: AnswerEvidenceRecord[]): Promise<{
     answer: string;
     evidence: AnswerEvidenceRecord[];
   }>;
 }
 
 export class PlaceholderAnswerSynthesizer implements AnswerSynthesizer {
-  async synthesize(question: string, pages: WikiPageRecord[]): Promise<{
+  async synthesize(question: string, pages: WikiPageRecord[], evidence?: AnswerEvidenceRecord[]): Promise<{
     answer: string;
     evidence: AnswerEvidenceRecord[];
   }> {
     return {
       answer: `Found ${pages.length} wiki page(s) related to "${question}". Live model synthesis is not enabled yet.`,
-      evidence: buildEvidenceFromPages(pages)
+      evidence: evidence && evidence.length > 0 ? evidence : buildEvidenceFromPages(pages)
     };
   }
 }
@@ -53,12 +53,13 @@ const synthesizedAnswerSchema = z.object({
 export class LlmAnswerSynthesizer implements AnswerSynthesizer {
   constructor(private readonly client: LanguageModelClient) {}
 
-  async synthesize(question: string, pages: WikiPageRecord[]): Promise<{
+  async synthesize(question: string, pages: WikiPageRecord[], evidence?: AnswerEvidenceRecord[]): Promise<{
     answer: string;
     evidence: AnswerEvidenceRecord[];
   }> {
+    const promptEvidence = evidence && evidence.length > 0 ? evidence : buildEvidenceFromPages(pages);
     const response = await this.client.generateText({
-      messages: buildAskPrompt(question, pages),
+      messages: buildAskPrompt(question, pages, promptEvidence),
       temperature: 0.2
     });
     let answerText = response.text.trim();
@@ -74,7 +75,7 @@ export class LlmAnswerSynthesizer implements AnswerSynthesizer {
 
     return {
       answer: answerText,
-      evidence: buildEvidenceFromPages(pages)
+      evidence: promptEvidence
     };
   }
 }
@@ -85,15 +86,15 @@ export class ResilientAnswerSynthesizer implements AnswerSynthesizer {
     private readonly fallback: AnswerSynthesizer
   ) {}
 
-  async synthesize(question: string, pages: WikiPageRecord[]): Promise<{
+  async synthesize(question: string, pages: WikiPageRecord[], evidence?: AnswerEvidenceRecord[]): Promise<{
     answer: string;
     evidence: AnswerEvidenceRecord[];
   }> {
     try {
-      return await this.primary.synthesize(question, pages);
+      return await this.primary.synthesize(question, pages, evidence);
     } catch (error) {
       console.error("Falling back to placeholder answer synthesizer:", error);
-      return this.fallback.synthesize(question, pages);
+      return this.fallback.synthesize(question, pages, evidence);
     }
   }
 }
