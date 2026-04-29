@@ -188,7 +188,7 @@ Still intentionally simple:
 - question retrieval is page-first keyword scoring, not vector search
 - compilation runs through a manual trigger instead of a persistent background worker
 - `document_chunks` exists in schema planning, but chunking and embeddings are not active yet
-- evidence is grouped by page with nested source references, not claim-level attribution
+- evidence is returned at the excerpt or source-reference level, not full claim-level attribution
 
 ## Checks
 

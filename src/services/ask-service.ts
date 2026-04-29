@@ -70,6 +70,23 @@ function passesRecallThreshold(score: number, tokenCount: number): boolean {
   return score >= 3;
 }
 
+function scoreExcerpt(tokens: string[], excerpt: string, label: string): number {
+  const normalizedExcerpt = excerpt.toLowerCase();
+  const normalizedLabel = label.toLowerCase();
+
+  let score = 0;
+  for (const token of tokens) {
+    if (normalizedLabel.includes(token)) {
+      score += 2;
+    }
+    if (normalizedExcerpt.includes(token)) {
+      score += 4;
+    }
+  }
+
+  return score;
+}
+
 function rankEvidencePages(
   pages: Array<{ page: WikiPageRecord; score: number }>
 ): Array<{ page: WikiPageRecord; score: number }> {
@@ -142,11 +159,12 @@ export class AskService {
       answer: synthesized.answer,
       evidence: synthesized.evidence.map((entry) => {
         const match = rankedEvidence.find((candidate) => candidate.page.slug === entry.pageSlug);
+        const excerptScore = scoreExcerpt(scoringTokens, entry.excerpt, entry.sourceLabel);
         return {
           ...entry,
-          score: match?.score
+          score: (match?.score ?? 0) + excerptScore
         };
-      }),
+      }).sort((left, right) => (right.score ?? 0) - (left.score ?? 0)),
       supportingPages
     };
   }

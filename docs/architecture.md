@@ -22,7 +22,7 @@ Still intentionally simple:
 
 - compile execution is manually triggered
 - retrieval is page-first keyword scoring
-- evidence is grouped by page with nested source references
+- evidence is excerpt-level, not claim-level
 - chunking and embeddings are not active yet
 
 ## Runtime Shape
@@ -119,8 +119,8 @@ Used for persistence.
 
 Important limitation:
 
-- the current `evidence` model is page-level, not claim-level
-- nested `sourceRefs` provide finer excerpts inside each page
+- the current `evidence` model is excerpt-level, not claim-level
+- evidence is derived from page `sourceRefs`, or from page summary text when no source refs exist
 - there is no raw-source fallback path in the current ask implementation when no compiled pages match
 
 ## Browser Console
@@ -167,6 +167,6 @@ This UI does not add separate backend state or orchestration. It only calls the 
 - activate chunking and embeddings
 - upgrade `document_chunks.embedding` from JSON to `pgvector` once the extension is available
 - improve retrieval beyond page-first keyword scoring
-- upgrade evidence from page-level grouping to excerpt or claim-level attribution
+- upgrade evidence from excerpt-level grouping to claim-level attribution
 - replace manual compile triggering with a persistent queue worker
 - add richer provenance and citation handling

@@ -4,6 +4,29 @@ import { extractJsonObject } from "../lib/json.js";
 import type { LanguageModelClient } from "../llm/types.js";
 import { buildAskPrompt } from "./ask-prompts.js";
 
+function buildEvidenceFromPages(pages: WikiPageRecord[]): AnswerEvidenceRecord[] {
+  return pages.flatMap((page) => {
+    const sourceRefs = page.sourceRefs ?? [];
+    if (sourceRefs.length > 0) {
+      return sourceRefs.map((sourceRef) => ({
+        pageTitle: page.title,
+        pageSlug: page.slug,
+        sourceLabel: sourceRef.label,
+        excerpt: sourceRef.excerpt,
+        score: undefined
+      }));
+    }
+
+    return [{
+      pageTitle: page.title,
+      pageSlug: page.slug,
+      sourceLabel: `${page.title}#summary`,
+      excerpt: page.summary,
+      score: undefined
+    }];
+  });
+}
+
 export interface AnswerSynthesizer {
   synthesize(question: string, pages: WikiPageRecord[]): Promise<{
     answer: string;
@@ -18,12 +41,7 @@ export class PlaceholderAnswerSynthesizer implements AnswerSynthesizer {
   }> {
     return {
       answer: `Found ${pages.length} wiki page(s) related to "${question}". Live model synthesis is not enabled yet.`,
-      evidence: pages.map((page) => ({
-        pageTitle: page.title,
-        pageSlug: page.slug,
-        sourceRefs: page.sourceRefs ?? [],
-        score: undefined
-      }))
+      evidence: buildEvidenceFromPages(pages)
     };
   }
 }
@@ -56,12 +74,7 @@ export class LlmAnswerSynthesizer implements AnswerSynthesizer {
 
     return {
       answer: answerText,
-      evidence: pages.map((page) => ({
-        pageTitle: page.title,
-        pageSlug: page.slug,
-        sourceRefs: page.sourceRefs ?? [],
-        score: undefined
-      }))
+      evidence: buildEvidenceFromPages(pages)
     };
   }
 }

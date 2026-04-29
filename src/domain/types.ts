@@ -12,7 +12,8 @@ export interface SourceRefRecord {
 export interface AnswerEvidenceRecord {
   pageTitle: string;
   pageSlug: string;
-  sourceRefs: SourceRefRecord[];
+  sourceLabel: string;
+  excerpt: string;
   score?: number;
 }
 

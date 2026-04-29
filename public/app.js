@@ -139,7 +139,8 @@ function renderAnswer() {
     ? state.answer.evidence.map((entry) => `
       <article class="evidence-item">
         <button class="inline-link" type="button" data-page-slug="${entry.pageSlug}">${escapeHtml(entry.pageTitle)}</button>
-        <p>${entry.sourceRefs.map((source) => escapeHtml(source.excerpt)).join(" ") || "No source excerpt returned."}</p>
+        <p><strong>${escapeHtml(entry.sourceLabel)}</strong></p>
+        <p>${escapeHtml(entry.excerpt) || "No source excerpt returned."}</p>
       </article>
     `).join("")
     : '<div class="empty-state">No evidence pages matched this question.</div>';
