@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LLM Wiki Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Knowledge Operations</p>
+          <h1>LLM Wiki Console</h1>
+        </div>
+        <button id="refresh-all-button" class="secondary-button">Refresh Workspace</button>
+      </header>
+
+      <section class="status-grid">
+        <article class="status-card">
+          <span class="status-label">Service</span>
+          <strong id="service-status">Checking...</strong>
+        </article>
+        <article class="status-card">
+          <span class="status-label">Storage</span>
+          <strong id="storage-driver">-</strong>
+        </article>
+        <article class="status-card">
+          <span class="status-label">Model</span>
+          <strong id="llm-provider">-</strong>
+        </article>
+        <article class="status-card">
+          <span class="status-label">Updated</span>
+          <strong id="last-updated">-</strong>
+        </article>
+      </section>
+
+      <main class="workspace-grid">
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Ingest</p>
+              <h2>New Document</h2>
+              <p class="panel-note">This action queues a document first. Use Job Control to compile queued items into wiki pages.</p>
+            </div>
+            <span class="pill" id="document-count">0 docs</span>
+          </div>
+
+          <form id="document-form" class="stack">
+            <label class="field">
+              <span>Title</span>
+              <input id="document-title" name="title" type="text" required maxlength="120" />
+            </label>
+
+            <label class="field">
+              <span>Source Type</span>
+              <select id="document-type" name="sourceType">
+                <option value="text">Text</option>
+                <option value="markdown">Markdown</option>
+                <option value="html">HTML</option>
+                <option value="pdf">PDF</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Content</span>
+              <textarea
+                id="document-content"
+                name="rawContent"
+                required
+                rows="10"
+                placeholder="Paste notes, source material, or a plain text summary..."
+              ></textarea>
+            </label>
+
+            <div class="actions">
+              <button type="submit" class="primary-button" id="submit-document-button">Submit To Queue</button>
+              <p id="document-feedback" class="feedback" aria-live="polite"></p>
+            </div>
+          </form>
+
+          <div class="activity-card status-helper">
+            <p class="eyebrow">Queue Status</p>
+            <p id="document-status-copy" class="activity-copy">No recent submission in this session.</p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Compile</p>
+              <h2>Job Control</h2>
+              <p class="panel-note">Compile takes queued documents and turns them into wiki pages or updates existing ones.</p>
+            </div>
+            <button id="run-compile-button" type="button" class="secondary-button">Run Compile</button>
+          </div>
+
+          <div class="metrics">
+            <article class="metric-card">
+              <span>Queued</span>
+              <strong id="queued-count">0</strong>
+            </article>
+            <article class="metric-card">
+              <span>Processing</span>
+              <strong id="processing-count">0</strong>
+            </article>
+            <article class="metric-card">
+              <span>Compiled</span>
+              <strong id="compiled-count">0</strong>
+            </article>
+          </div>
+
+          <div class="activity-card">
+            <p class="eyebrow">Latest Activity</p>
+            <p id="compile-activity" class="activity-copy">No compile run in this session yet.</p>
+          </div>
+
+          <p id="compile-feedback" class="feedback compile-feedback" aria-live="polite"></p>
+        </section>
+
+        <section class="panel panel-scroll">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Browse</p>
+              <h2>Wiki Pages</h2>
+            </div>
+            <span class="pill" id="page-count">0 pages</span>
+          </div>
+
+          <div id="wiki-list" class="list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Ask</p>
+              <h2>Question Console</h2>
+            </div>
+          </div>
+
+          <form id="ask-form" class="stack">
+            <label class="field">
+              <span>Question</span>
+              <textarea
+                id="question-input"
+                name="question"
+                required
+                rows="4"
+                placeholder="Ask from compiled wiki pages..."
+              ></textarea>
+            </label>
+
+            <div class="actions">
+              <button type="submit" class="primary-button" id="ask-button">Ask Wiki</button>
+              <p id="ask-feedback" class="feedback" aria-live="polite"></p>
+            </div>
+          </form>
+
+          <div id="answer-panel" class="answer-card empty">
+            <p class="empty-copy">Answers and source evidence will appear here.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <aside id="drawer" class="drawer" aria-hidden="true">
+      <div class="drawer-backdrop" id="drawer-backdrop"></div>
+      <section class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+        <header class="drawer-header">
+          <div>
+            <p class="eyebrow">Wiki Detail</p>
+            <h2 id="drawer-title">Page Title</h2>
+            <p id="drawer-meta" class="drawer-meta"></p>
+          </div>
+          <div class="drawer-actions">
+            <button id="recompile-page-button" class="secondary-button">Recompile Page</button>
+            <button id="close-drawer-button" class="ghost-button" aria-label="Close drawer">Close</button>
+          </div>
+        </header>
+
+        <div class="drawer-content">
+          <section class="drawer-section">
+            <h3>Summary</h3>
+            <p id="drawer-summary"></p>
+          </section>
+
+          <section class="drawer-section">
+            <h3>Body</h3>
+            <pre id="drawer-body" class="markdown-body"></pre>
+          </section>
+
+          <section class="drawer-section">
+            <h3>Sources</h3>
+            <div id="drawer-sources" class="source-list"></div>
+          </section>
+        </div>
+      </section>
+    </aside>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
